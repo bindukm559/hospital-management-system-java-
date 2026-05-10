@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital Management System - Book Appointment</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <h1>🏥 Hospital Management System</h1>
+        <a href="admin.html" class="nav-link">Admin Panel</a>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <h2>Book an Appointment</h2>
+            
+            <form id="bookingForm">
+                <div class="form-group">
+                    <label for="patientName">Patient Name *</label>
+                    <input type="text" id="patientName" required placeholder="Enter your full name">
+                </div>
+
+                <div class="form-group">
+                    <label for="doctorSelect">Select Doctor *</label>
+                    <select id="doctorSelect" required>
+                        <option value="">Choose a doctor...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="appointmentDate">Appointment Date *</label>
+                    <input type="date" id="appointmentDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="timeSlot">Available Time Slots *</label>
+                    <select id="timeSlot" required disabled>
+                        <option value="">First select doctor and date</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Book Appointment</button>
+            </form>
+
+            <div id="message" class="message"></div>
+        </div>
+
+        <div class="card">
+            <h3>Why Choose Our Hospital?</h3>
+            <ul class="features">
+                <li>🩺 Experienced Specialists</li>
+                <li>⏰ Flexible Time Slots (9 AM - 5 PM)</li>
+                <li>📱 Easy Online Booking</li>
+                <li>🏆 Quality Healthcare</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/api';
+        
+        // Set minimum date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('appointmentDate').min = today;
+        
+        // Load doctors on page load
+        loadDoctors();
+        
+        async function loadDoctors() {
+            try {
+                const response = await fetch(`${API_URL}/doctors`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load doctors');
+                }
+                
+                const doctors = await response.json();
+                
+                const select = document.getElementById('doctorSelect');
+                select.innerHTML = '<option value="">Choose a doctor...</option>';
+                
+                if (doctors.length === 0) {
+                    select.innerHTML = '<option value="">No doctors available</option>';
+                    return;
+                }
+                
+                doctors.forEach(doctor => {
+                    const option = document.createElement('option');
+                    option.value = doctor.id;
+                    option.textContent = `${doctor.name} - ${doctor.specialty}`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading doctors:', error);
+                showMessage('⚠️ Error loading doctors. Please ensure the server is running at http://localhost:8080', 'error');
+            }
+        }
+        
+        // Load time slots when doctor and date are selected
+        document.getElementById('doctorSelect').addEventListener('change', loadTimeSlots);
+        document.getElementById('appointmentDate').addEventListener('change', loadTimeSlots);
+        
+        async function loadTimeSlots() {
+            const doctorId = document.getElementById('doctorSelect').value;
+            const date = document.getElementById('appointmentDate').value;
+            const timeSlotSelect = document.getElementById('timeSlot');
+            
+            if (!doctorId || !date) {
+                timeSlotSelect.disabled = true;
+                timeSlotSelect.innerHTML = '<option value="">First select doctor and date</option>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/timeslots?doctorId=${doctorId}&date=${date}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load time slots');
+                }
+                
+                const slots = await response.json();
+                
+                timeSlotSelect.innerHTML = '';
+                timeSlotSelect.disabled = false;
+                
+                if (slots.length === 0) {
+                    timeSlotSelect.innerHTML = '<option value="">No slots available for this date</option>';
+                    timeSlotSelect.disabled = true;
+                    return;
+                }
+                
+                timeSlotSelect.innerHTML = '<option value="">Select a time...</option>';
+                slots.forEach(slot => {
+                    const option = document.createElement('option');
+                    option.value = slot;
+                    option.textContent = slot;
+                    timeSlotSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading time slots:', error);
+                showMessage('⚠️ Error loading time slots', 'error');
+            }
+        }
+        
+        // Handle form submission
+        document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const patientName = document.getElementById('patientName').value.trim();
+            const doctorId = document.getElementById('doctorSelect').value;
+            const date = document.getElementById('appointmentDate').value;
+            const timeSlot = document.getElementById('timeSlot').value;
+            
+            // Validate all fields
+            if (!patientName) {
+                showMessage('❌ Please enter your name', 'error');
+                return;
+            }
+            
+            if (!doctorId) {
+                showMessage('❌ Please select a doctor', 'error');
+                return;
+            }
+            
+            if (!date) {
+                showMessage('❌ Please select a date', 'error');
+                return;
+            }
+            
+            if (!timeSlot) {
+                showMessage('❌ Please select a time slot', 'error');
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Booking...';
+            
+            try {
+                console.log('Sending booking request:', { patientName, doctorId, date, timeSlot });
+                
+                const response = await fetch(`${API_URL}/appointments`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        patientName, 
+                        doctorId, 
+                        date, 
+                        timeSlot 
+                    })
+                });
+                
+                console.log('Response status:', response.status);
+                
+                const result = await response.json();
+                console.log('Response data:', result);
+                
+                if (response.ok && result.success) {
+                    showMessage('✅ Appointment booked successfully! Your booking ID is ' + result.id, 'success');
+                    document.getElementById('bookingForm').reset();
+                    document.getElementById('timeSlot').disabled = true;
+                    document.getElementById('timeSlot').innerHTML = '<option value="">First select doctor and date</option>';
+                } else {
+                    showMessage('❌ ' + (result.error || 'Booking failed. Please try again.'), 'error');
+                }
+            } catch (error) {
+                console.error('Error booking appointment:', error);
+                showMessage('❌ Error booking appointment. Please ensure the server is running and try again.', 'error');
+            } finally {
+                // Restore button state
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+        
+        function showMessage(text, type) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+            msg.style.display = 'block';
+            
+            // Auto-hide after 8 seconds for success, keep error visible
+            if (type === 'success') {
+                setTimeout(() => {
+                    msg.style.display = 'none';
+                }, 8000);
+            }
+        }
+    </script>
+</body>
+</html>

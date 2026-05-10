@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Hospital Management</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .admin-content {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>🏥 Admin Panel</h1>
+        <div>
+            <span id="adminUsername" class="hidden" style="margin-right: 20px; color: #667eea; font-weight: 600;"></span>
+            <button id="logoutBtn" class="btn btn-danger btn-small hidden" onclick="logout()">Logout</button>
+            <a href="index.html" class="nav-link">Patient Portal</a>
+        </div>
+    </nav>
+
+    <!-- Login Form -->
+    <div id="loginContainer" class="login-container">
+        <div class="card">
+            <h2>🔐 Admin Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required placeholder="Enter username" autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="Enter password" autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            <div id="loginMessage" class="message"></div>
+            
+            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #666;">
+                <strong>Demo Credentials:</strong><br>
+                Username: <code>admin</code><br>
+                Password: <code>1234</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Content -->
+    <div id="adminContent" class="admin-content">
+        <div class="container">
+            <!-- Add Doctor Section -->
+            <div class="card">
+                <h2>Add New Doctor</h2>
+                <form id="addDoctorForm">
+                    <div class="form-group">
+                        <label for="doctorName">Doctor Name</label>
+                        <input type="text" id="doctorName" required placeholder="Dr. Smith">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="specialty">Specialty</label>
+                        <input type="text" id="specialty" required placeholder="Cardiology">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Add Doctor</button>
+                </form>
+                <div id="addMessage" class="message"></div>
+            </div>
+
+            <!-- Doctors List -->
+            <div class="card">
+                <h2>Current Doctors</h2>
+                <div id="doctorsList" class="table-container">
+                    <p>Loading doctors...</p>
+                </div>
+            </div>
+
+            <!-- Appointments List -->
+            <div class="card">
+                <h2>All Appointments</h2>
+                <div id="appointmentsList" class="table-container">
+                    <p>Loading appointments...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/api';
+        let isLoggedIn = false;
+        
+        // Check if already logged in (session storage)
+        if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+            showAdminPanel();
+        }
+        
+        // Login form handler
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    sessionStorage.setItem('adminLoggedIn', 'true');
+                    sessionStorage.setItem('adminUsername', username);
+                    showAdminPanel();
+                } else {
+                    showLoginMessage('❌ Invalid username or password', 'error');
+                }
+            } catch (error) {
+                showLoginMessage('❌ Error connecting to server. Please ensure server is running.', 'error');
+            }
+        });
+        
+        function showAdminPanel() {
+            isLoggedIn = true;
+            document.getElementById('loginContainer').classList.add('hidden');
+            document.getElementById('adminContent').style.display = 'block';
+            document.getElementById('logoutBtn').classList.remove('hidden');
+            
+            const username = sessionStorage.getItem('adminUsername') || 'Admin';
+            document.getElementById('adminUsername').textContent = `Welcome, ${username}`;
+            document.getElementById('adminUsername').classList.remove('hidden');
+            
+            // Load data
+            loadDoctors();
+            loadAppointments();
+        }
+        
+        function logout() {
+            sessionStorage.removeItem('adminLoggedIn');
+            sessionStorage.removeItem('adminUsername');
+            window.location.reload();
+        }
+        
+        // Add doctor form handler
+        document.getElementById('addDoctorForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!isLoggedIn) {
+                alert('Please login first');
+                return;
+            }
+            
+            const name = document.getElementById('doctorName').value;
+            const specialty = document.getElementById('specialty').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/doctors`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, specialty })
+                });
+                
+                if (response.ok) {
+                    showMessage('addMessage', '✅ Doctor added successfully!', 'success');
+                    document.getElementById('addDoctorForm').reset();
+                    loadDoctors();
+                } else {
+                    showMessage('addMessage', '❌ Failed to add doctor', 'error');
+                }
+            } catch (error) {
+                showMessage('addMessage', '❌ Error adding doctor', 'error');
+            }
+        });
+        
+        async function loadDoctors() {
+            try {
+                console.log('Loading doctors...');
+                const response = await fetch(`${API_URL}/doctors`);
+                const doctors = await response.json();
+                
+                console.log('Doctors loaded:', doctors);
+                
+                const container = document.getElementById('doctorsList');
+                
+                if (doctors.length === 0) {
+                    container.innerHTML = '<p>No doctors found</p>';
+                    return;
+                }
+                
+                let html = '<table><thead><tr><th>ID</th><th>Name</th><th>Specialty</th><th>Action</th></tr></thead><tbody>';
+                
+                doctors.forEach(doctor => {
+                    html += `
+                        <tr>
+                            <td>${doctor.id || 'N/A'}</td>
+                            <td>${doctor.name || 'N/A'}</td>
+                            <td>${doctor.specialty || 'N/A'}</td>
+                            <td>
+                                <button class="btn btn-danger btn-small" onclick="deleteDoctor(${doctor.id})">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading doctors:', error);
+                document.getElementById('doctorsList').innerHTML = '<p class="error">Error loading doctors: ' + error.message + '</p>';
+            }
+        }
+        
+        async function deleteDoctor(id) {
+            if (!confirm('Are you sure you want to remove this doctor?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/doctors?id=${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadDoctors();
+                    loadAppointments();
+                } else {
+                    alert('Failed to remove doctor');
+                }
+            } catch (error) {
+                alert('Error removing doctor');
+            }
+        }
+        
+        async function deleteAppointment(id) {
+            if (!confirm('Are you sure you want to cancel this appointment?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/appointments?id=${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    alert('✅ Appointment cancelled successfully');
+                    loadAppointments();
+                } else {
+                    alert('❌ Failed to cancel appointment: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error cancelling appointment:', error);
+                alert('❌ Error cancelling appointment: ' + error.message);
+            }
+        }
+        
+        async function loadAppointments() {
+            try {
+                console.log('Loading appointments...');
+                
+                const [appointmentsRes, doctorsRes] = await Promise.all([
+                    fetch(`${API_URL}/appointments`),
+                    fetch(`${API_URL}/doctors`)
+                ]);
+                
+                const appointments = await appointmentsRes.json();
+                const doctors = await doctorsRes.json();
+                
+                console.log('Appointments loaded:', appointments);
+                console.log('Doctors loaded:', doctors);
+                
+                const doctorMap = {};
+                doctors.forEach(d => doctorMap[d.id] = d.name);
+                
+                const container = document.getElementById('appointmentsList');
+                
+                if (appointments.length === 0) {
+                    container.innerHTML = '<p>No appointments found</p>';
+                    return;
+                }
+                
+                let html = '<table><thead><tr><th>ID</th><th>Patient</th><th>Doctor</th><th>Date</th><th>Time</th><th>Action</th></tr></thead><tbody>';
+                
+                appointments.forEach(apt => {
+                    console.log('Processing appointment:', apt);
+                    html += `
+                        <tr>
+                            <td>${apt.id || 'N/A'}</td>
+                            <td>${apt.patientName || 'N/A'}</td>
+                            <td>${doctorMap[apt.doctorId] || 'Unknown Doctor (ID: ' + apt.doctorId + ')'}</td>
+                            <td>${apt.date || 'N/A'}</td>
+                            <td>${apt.timeSlot || 'N/A'}</td>
+                            <td>
+                                <button class="btn btn-danger btn-small" onclick="deleteAppointment(${apt.id})">
+                                    Cancel
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading appointments:', error);
+                document.getElementById('appointmentsList').innerHTML = '<p class="error">Error loading appointments: ' + error.message + '</p>';
+            }
+        }
+        
+        function showMessage(elementId, text, type) {
+            const msg = document.getElementById(elementId);
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+            msg.style.display = 'block';
+            
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showLoginMessage(text, type) {
+            const msg = document.getElementById('loginMessage');
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+            msg.style.display = 'block';
+        }
+        
+        async function debugCSV() {
+            try {
+                const response = await fetch(`${API_URL}/debug/csv`);
+                const data = await response.json();
+                
+                console.log('=== RAW CSV DATA ===');
+                console.log('Raw lines from appointments.csv:');
+                data.rawLines.forEach((line, i) => {
+                    console.log(`Line ${i}: "${line}"`);
+                    console.log(`  Split: [${line.split(',').join('] [')}]`);
+                });
+                
+                alert('CSV debug info logged to console. Press F12 to view.');
+            } catch (error) {
+                console.error('Debug error:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function resetData() {
+            if (!confirm('⚠️ WARNING: This will delete ALL appointments and reset doctors to default. Are you sure?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/admin/reset`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Data files reset successfully!');
+                    loadDoctors();
+                    loadAppointments();
+                } else {
+                    alert('❌ Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Reset error:', error);
+                alert('❌ Error resetting data: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
